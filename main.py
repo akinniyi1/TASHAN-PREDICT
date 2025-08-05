@@ -2,6 +2,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import random
 from datetime import datetime, timezone, timedelta
+from flask import Flask
+import threading
 
 # ── CONFIG ─────────────────────────────────────────────────────────────
 
@@ -93,13 +95,31 @@ async def handle_predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
     image_url, caption = get_prediction()
     await query.message.reply_photo(photo=image_url, caption=caption, parse_mode="Markdown")
 
+# ── FLASK SERVER FOR RENDER ─────────────────────────────────────────────
+
+flask_app = Flask(__name__)
+
+@flask_app.route('/')
+def index():
+    return "✅ Telegram bot is running."
+
+def run_flask():
+    flask_app.run(host='0.0.0.0', port=10000)
+
 # ── MAIN ─────────────────────────────────────────────────────────────────
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(handle_predict, pattern="predict"))
-    app.run_polling()
+    # Start the Telegram bot in a separate thread
+    def run_bot():
+        app = ApplicationBuilder().token(BOT_TOKEN).build()
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CallbackQueryHandler(handle_predict, pattern="predict"))
+        app.run_polling()
+
+    threading.Thread(target=run_bot).start()
+
+    # Run the Flask server (so Render sees an open port)
+    run_flask()
 
 if __name__ == "__main__":
     main()
