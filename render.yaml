@@ -1,9 +1,7 @@
 services:
   - type: web
     name: tashan-predict
-    runtime: python
+    env: python
     buildCommand: ""
     startCommand: python main.py
-    envVars:
-      - key: PORT
-        value: 10000
+    autoDeploy: true
