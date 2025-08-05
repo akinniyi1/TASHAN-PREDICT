@@ -21,6 +21,7 @@ IMAGE_BIG       = "https://i.ibb.co/VczDcfgC/6282730971962918809.jpg"
 IMAGE_SMALL     = "https://i.ibb.co/qMsTSbG8/6282730971962918811.jpg"
 REGISTER_LINK   = "https://www.tashanwin.ink/#/register?invitationCode=344522232221"
 PREDICTION_CHNL = "https://t.me/+RNUQHXvEy5w0ZDk1"
+SUPPORT_LINK    = "https://t.me/Jennifer_Support"
 
 user_last: dict[int, datetime] = {}
 
@@ -35,7 +36,8 @@ def main_menu_keyboard():
         [
             InlineKeyboardButton("🔗 Register Link",      url=REGISTER_LINK),
             InlineKeyboardButton("📢 Prediction Channel", url=PREDICTION_CHNL)
-        ]
+        ],
+        [InlineKeyboardButton("💁 Support", url=SUPPORT_LINK)]
     ])
 
 def back_keyboard():
@@ -69,16 +71,24 @@ async def get_prediction(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # Cooldown
     if last and (now - last) < timedelta(seconds=60):
         wait = 60 - int((now - last).seconds)
-        return await ctx.bot.send_message(chat_id=chat_id, text=f"⏱ Please wait {wait}s before next prediction.", reply_markup=back_keyboard())
+        return await ctx.bot.send_message(
+            chat_id=chat_id,
+            text=f"⏱ Please wait {wait}s before next prediction.",
+            reply_markup=back_keyboard()
+        )
 
     user_last[uid] = now
 
     # Generate prediction
     purchase = "Big" if now.minute % 2 == 0 else "Small"
     n1, n2   = __import__("random").sample(range(1,10), 2)
-    period   = now.strftime("%Y%m%d%H%M")
     colour   = __import__("random").choice(["Green","Violet"])
     image    = IMAGE_BIG if purchase=="Big" else IMAGE_SMALL
+
+    # Fixed prefix + 3 random digits
+    prefix = "20250805100011"
+    suffix = "".join(__import__("random").choices("0123456789", k=3))
+    period = prefix + suffix
 
     caption = (
         "🎰 Prediction for Tashan Win 1 MIN 🎰\n\n"
