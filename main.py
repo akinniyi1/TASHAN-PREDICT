@@ -3,7 +3,11 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI
 import uvicorn
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -18,20 +22,16 @@ IMAGE_SMALL     = "https://i.ibb.co/qMsTSbG8/6282730971962918811.jpg"
 REGISTER_LINK   = "https://www.tashanwin.ink/#/register?invitationCode=344522232221"
 PREDICTION_CHNL = "https://t.me/+RNUQHXvEy5w0ZDk1"
 
-# ── STATE ────────────────────────────────────────────────────────────────
 user_last: dict[int, datetime] = {}
 
-# ── FASTAPI HEALTHCHECK ─────────────────────────────────────────────────
 web = FastAPI()
-
 @web.get("/")
 def health():
     return {"status": "Tashan Win Bot alive"}
 
-# ── KEYBOARDS ────────────────────────────────────────────────────────────
 def main_menu_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔮 Get Prediction",   callback_data="get")],
+        [InlineKeyboardButton("🔮 Get Prediction", callback_data="get")],
         [
             InlineKeyboardButton("🔗 Register Link",      url=REGISTER_LINK),
             InlineKeyboardButton("📢 Prediction Channel", url=PREDICTION_CHNL)
@@ -40,43 +40,45 @@ def main_menu_keyboard():
 
 def back_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu")]
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="back")]
     ])
 
-# ── HANDLERS ─────────────────────────────────────────────────────────────
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Handles both /start and back_to_menu callbacks."""
-    # If callback_query, edit that message; if message, send new
+    # For both /start text and back button
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.edit_message_text(
-            text=f"🌟 Welcome, {update.effective_user.first_name}! 🌟\n🆔 {update.effective_user.id}",
-            reply_markup=main_menu_keyboard()
-        )
+        chat_id = update.callback_query.message.chat_id
     else:
-        await update.message.reply_text(
-            f"🌟 Welcome, {update.effective_user.first_name}! 🌟\n🆔 {update.effective_user.id}",
-            reply_markup=main_menu_keyboard()
-        )
+        chat_id = update.message.chat_id
+
+    user = update.effective_user
+    welcome = (
+        f"🌟 Welcome, {user.first_name}! 🌟\n"
+        f"🆔 {user.id}"
+    )
+    await ctx.bot.send_message(chat_id=chat_id, text=welcome, reply_markup=main_menu_keyboard())
 
 async def get_prediction(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    chat_id = query.message.chat_id
+    uid     = query.from_user.id
+    now     = datetime.utcnow()
+    last    = user_last.get(uid)
 
-    uid  = query.from_user.id
-    now  = datetime.utcnow()
-    last = user_last.get(uid)
+    # Cooldown
     if last and (now - last) < timedelta(seconds=60):
         wait = 60 - int((now - last).seconds)
-        return await query.edit_message_text(f"⏱ Please wait {wait}s before your next prediction.", reply_markup=back_keyboard())
+        return await ctx.bot.send_message(chat_id=chat_id, text=f"⏱ Please wait {wait}s before next prediction.", reply_markup=back_keyboard())
 
     user_last[uid] = now
 
+    # Generate prediction
     purchase = "Big" if now.minute % 2 == 0 else "Small"
-    n1, n2   = __import__("random").sample(range(1, 10), 2)
+    n1, n2   = __import__("random").sample(range(1,10), 2)
     period   = now.strftime("%Y%m%d%H%M")
-    colour   = __import__("random").choice(["Green", "Violet"])
-    image    = IMAGE_BIG if purchase == "Big" else IMAGE_SMALL
+    colour   = __import__("random").choice(["Green","Violet"])
+    image    = IMAGE_BIG if purchase=="Big" else IMAGE_SMALL
 
     caption = (
         "🎰 Prediction for Tashan Win 1 MIN 🎰\n\n"
@@ -91,25 +93,26 @@ async def get_prediction(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "Always play through fund management 5 level."
     )
 
-    await query.edit_message_media(
-        media={"type":"photo","media":image,"caption":caption},
+    # Send new photo message with back button
+    await ctx.bot.send_photo(
+        chat_id=chat_id,
+        photo=image,
+        caption=caption,
         reply_markup=back_keyboard()
     )
 
-# ── ENTRY POINT ──────────────────────────────────────────────────────────
 def main():
-    # 1) Start FastAPI in background
-    def run_api():
-        uvicorn.run(web, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-    threading.Thread(target=run_api, daemon=True).start()
+    # Start healthcheck HTTP
+    threading.Thread(
+        target=lambda: uvicorn.run(web, host="0.0.0.0", port=int(os.environ.get("PORT",10000))),
+        daemon=True
+    ).start()
 
-    # 2) Build and run Telegram bot
+    # Start Telegram bot
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(start,          pattern="back_to_menu"))
     app.add_handler(CallbackQueryHandler(get_prediction, pattern="get"))
-
-    # Drop any pending updates on startup to avoid conflicts
+    app.add_handler(CallbackQueryHandler(start, pattern="back"))
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
