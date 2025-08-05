@@ -1,128 +1,88 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import random
-from datetime import datetime, timedelta
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-)
+import datetime
 
-# ── CONFIG ────────────────────────────────────────────────────────────────
+# BOT CONFIG
+BOT_TOKEN = '7665990129:AAGJ2wCzzJhgmb2OGRc5kn8XdfKCh2CUqlI'
+REGISTER_LINK = 'https://www.tashanwin.ink/#/register?invitationCode=344522232221'
+CHANNEL_LINK = 'https://t.me/+RNUQHXvEy5w0ZDk1'
+IMAGE_BIG = 'https://i.ibb.co/VczDcfgC/6282730971962918809.jpg'
+IMAGE_SMALL = 'https://i.ibb.co/qMsTSbG8/6282730971962918811.jpg'
+STICKER_ID = 'CAACAgEAAxkBAAIBG2Ymt9yS_VUbZu8Y5w6vlsfKRE9QAAKPAwACUkt5RzyIsyP8dOdwNQQ'  # Go! Go! Go!
 
-BOT_TOKEN        = "7665990129:AAGJ2wCzzJhgmb2OGRc5kn8XdfKCh2CUqlI"
-IMAGE_BIG        = "https://i.ibb.co/VczDcfgC/6282730971962918809.jpg"
-IMAGE_SMALL      = "https://i.ibb.co/qMsTSbG8/6282730971962918811.jpg"
-REGISTER_LINK    = "https://www.tashanwin.ink/#/register?invitationCode=344522232221"
-PREDICTION_CHNL  = "https://t.me/+RNUQHXvEy5w0ZDk1"
-STICKER_FILE_ID  = "CAACAgUAAxkBAAEEj_xljozTcFd1wHEwUCDj9JPlKQxh0wACaAoAAj-VQUV9d0AXc5UX1zQE"
-
-# ── PER-USER COOLDOWN TRACKER ──────────────────────────────────────────────
-
-user_last_prediction: dict[int, datetime] = {}
-
-# ── BUILD MAIN MENU ───────────────────────────────────────────────────────
-
-def build_main_menu():
-    return InlineKeyboardMarkup([
-        # Top row: Get Prediction
-        [InlineKeyboardButton("🔮 Get Prediction", callback_data="get_prediction")],
-        # Second row: Register & Channel side by side
-        [
-            InlineKeyboardButton("🔗 Register Link", url=REGISTER_LINK),
-            InlineKeyboardButton("📢 Prediction Channel", url=PREDICTION_CHNL)
-        ]
-    ])
-
-# ── /start HANDLER ─────────────────────────────────────────────────────────
-
+# COMMAND: /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    welcome = (
-        f"🌟 Welcome, {user.first_name}! 🌟\n"
-        f"👤 Username: @{(user.username or 'N/A')}\n"
-        f"🆔 User ID: {user.id}\n\n"
-        "Please select an option below:"
-    )
+    name = user.first_name
+    user_id = user.id
+
+    keyboard = [
+        [InlineKeyboardButton("🔮 Get Prediction", callback_data="predict")],
+        [
+            InlineKeyboardButton("🔗 Register Link", url=REGISTER_LINK),
+            InlineKeyboardButton("📢 Prediction Channel", url=CHANNEL_LINK)
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
-        welcome,
-        reply_markup=build_main_menu()
+        f"👋 Hello {name} (ID: {user_id})\nWelcome to the winGO 1 MIN Prediction Bot!\n\nChoose an option below:",
+        reply_markup=reply_markup
     )
 
-# ── PREDICTION HANDLER ─────────────────────────────────────────────────────
-
-async def get_prediction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# CALLBACK: Menu handler
+async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    uid = query.from_user.id
     await query.answer()
 
-    now = datetime.utcnow()
-    last = user_last_prediction.get(uid)
-    if last and (now - last) < timedelta(seconds=60):
-        wait = 60 - int((now - last).total_seconds())
-        return await query.edit_message_text(f"⏱ Please wait {wait}s before requesting another prediction.")
+    if query.data == "predict":
+        await send_prediction(query, context)
 
-    # update last-request time
-    user_last_prediction[uid] = now
+    elif query.data == "back":
+        await start(update, context)
 
-    # Generate prediction details
-    purchase = "Big" if now.minute % 2 == 0 else "Small"
-    colour   = random.choice(["Green", "Violet"])
-    nums     = random.sample(range(1, 10), 2)
-    number_text = f"{nums[0]} or {nums[1]}"
-    period   = now.strftime("%Y%m%d%H%M")  # e.g. 202508051234
-    image    = IMAGE_BIG if purchase == "Big" else IMAGE_SMALL
+# GENERATE AND SEND PREDICTION
+async def send_prediction(query, context):
+    # Toggle logic
+    toggle = random.choice(["BIG", "SMALL"])
+    image = IMAGE_BIG if toggle == "BIG" else IMAGE_SMALL
+    color = random.choice(["Green", "Red", "Blue"])
+    numbers = random.sample(range(0, 10), 2)
 
-    caption = (
-        "🎰 Prediction for Tashan Win 1 MIN 🎰\n\n"
+    # Period format
+    now = datetime.datetime.now()
+    period = now.strftime("%Y%m%d%H%M")
+
+    # Message
+    message = (
+        "🎰 Prediction for winGO 1 MIN 🎰\n\n"
         f"📅 Period: {period}\n"
-        f"💸 Purchase: {purchase}\n\n"
-        "🔮 Risky Predictions:\n"
-        f"👉🏻 Colour: {colour}\n"
-        f"👉🏻 Numbers: {number_text}\n\n"
+        f"💸 Purchase: {toggle}\n"
+        f"🔮 Risky Predictions:\n"
+        f"👉🏻 Colour: {color}\n"
+        f"👉🏻 Numbers: {numbers[0]} or {numbers[1]}\n\n"
         "💡 Strategy Tip:\n"
         "Use the 2x strategy for better chances of profit and winning.\n\n"
         "📊 Fund Management:\n"
         "Always play through fund management 5 level."
     )
 
-    # 1) Send photo + caption + back button
-    await query.edit_message_media(
-        media={
-            "type": "photo",
-            "media": image,
-            "caption": caption
-        },
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu")
-        ]])
-    )
+    # Back to Menu button
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="back")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # 2) Send Go! Go! Go! sticker below the prediction
-    await context.bot.send_sticker(chat_id=uid, sticker=STICKER_FILE_ID)
+    # Send image + prediction
+    await query.message.reply_photo(photo=image, caption=message, reply_markup=reply_markup)
 
-# ── BACK TO MENU HANDLER ────────────────────────────────────────────────────
+    # Send sticker
+    await context.bot.send_sticker(chat_id=query.message.chat_id, sticker=STICKER_ID)
 
-async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text("🏠 Main Menu", reply_markup=build_main_menu())
-
-# ── ENTRY POINT ─────────────────────────────────────────────────────────────
-
-def main():
+# RUN BOT
+if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(get_prediction, pattern="get_prediction"))
-    app.add_handler(CallbackQueryHandler(back_to_menu, pattern="back_to_menu"))
-
-    # Blocks here, polling Telegram
+    app.add_handler(CommandHandler('start', start))
+    app.add_handler(CallbackQueryHandler(handle_buttons))
     app.run_polling()
-
-if __name__ == "__main__":
-    main()
